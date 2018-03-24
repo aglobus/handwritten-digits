@@ -1,0 +1,268 @@
+% Created 2016-10-17 Mon 22:56
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Alex Globus}
+\date{\today}
+\title{CISC 452 Assignment \#2}
+\hypersetup{
+ pdfauthor={Alex Globus},
+ pdftitle={CISC 452 Assignment \#2},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 25.1.1 (Org mode 8.3.6)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+
+\section{Back-propagation Algorithm}
+\label{sec:orgheadline3}
+
+Let the input layer consist of input vector \(\bf{x} = \{ x_1, \ldots, x_K \}\). The hidden layer has \(N\) neurons \(\bf{h} = \{h_1, \ldots, h_N \}\) and the output layer is \(\bf{y} = \{ y_1, \ldots, y_M \}\). Every element in the input layer is connected to every neuron in the hidden layer with \(w_{ki}\) which represents the weight on the connection between the kth input element and the ith hidden neuron. Every output from the ith hidden layer to the jth output neuron is represented by \(w'_{ij}\). Let \(w_{ki}\) be the \((k,i)\) entry in \(K \times N\) matrix \(\bf{W}\) and \(w'_{ij}\) be the \((i,j)\) entry in \(N \times M\) matrix \(\bf{W'}\).
+
+The output of neuron \(h_{i}\) in the hidden layer is given as follows:
+
+\[
+h_i = f(u_i) = f(\sum\limits_{k=1}^{K} w_{ki}x_k)
+\]
+Similarly for the output of neuron \(y_j\) in the output layer:
+
+\[
+y_j = f(u'_j) = f(\sum\limits_{i=1}^{N} w'_{ij}h_i)
+\]
+
+Our error equation we wish to minimize:
+
+\[
+E = \frac{1}{2} \sum\limits_{j=1}^{M}(y_j - t_j)^2
+\]
+\subsection{Updating hidden to output nodes}
+\label{sec:orgheadline1}
+
+We need to update both sets of weights (hidden-to-input \(w_{ki}\) and hidden-to-output \(w'_{ij}\)). To do this we compute the vector of partial derivatives of E with respect to both weights. First, we start with \(w'_{ij}\).
+
+\[
+\frac{\partial E}{\partial w'_{ij}} = \frac{\partial E}{\partial y_j} \cdot \frac{\partial y_j}{\partial u'_j} \cdot \frac{\partial u'_j}{\partial w'_{ij}}
+\]
+
+\[
+\frac{\partial E}{\partial y_j} = y_j - t_j
+\]
+
+\[
+\frac{\partial y_j}{\partial u'_j} = y_j(1 - y_j) = f(u'_j)(1 - f(u'_j))
+\]
+
+\[
+\frac{\partial u'_j}{\partial w'_{ij}} = \frac{\partial \sum\limits_{i=1}^{N} w'_{ij}h_i}{\partial w'_{ij}} = h_i
+\]
+
+\[
+\frac{\partial E}{\partial w'_{ij}} = (y_j - t_j) \cdot y_j(1-y_j) \cdot h_i
+\]
+
+\[
+w'_{ij,\text{new}} = w'_{ij,\text{old}} - \eta \cdot (y_j - t_j) \cdot y_j(1-y_j) \cdot h_i
+\]
+
+\subsection{Updating input to hidden nodes}
+\label{sec:orgheadline2}
+
+Now let's compute \(E\) with respect to the input-to-hidden weights \(w_{ki}\). Remember that each hidden neuron that \(w_{ki}\) is connected to is itself connected to every output node. This is taken into account with the summation of the hidden-to-output gradients.
+
+\[
+\frac{\partial E}{\partial w_{ki}} = \sum\limits_{j=1}^{M}\bigg(
+\frac{\partial E}{\partial y_j} \cdot
+\frac{\partial y_j}{\partial u'_j} \cdot
+\frac{\partial u'_j}{\partial h_i}
+\bigg) \cdot
+\frac{\partial h_i}{\partial u_i} \cdot
+\frac{\partial u_i}{\partial w_{ki}}
+\]
+
+\[
+\frac{\partial u'_j}{\partial h_i} = \frac{\partial \sum\limits_{i = 1}^{N}w'_{ij}h_i}{\partial h_i} = w'_{ij}
+\]
+
+\[
+\frac{\partial h_i}{\partial u_i} = h_i(1-h_i)
+\]
+
+\[
+\frac{\partial u_i}{\partial w_{ki}} = \frac{\partial \sum\limits_{k=1}^{K}w_{ki}x_k}{\partial w_{ki}} = x_k
+\]
+
+\[
+\frac{\partial E}{\partial w_{ki}} = \sum\limits_{j=1}^{M}\bigg[
+(y_j - t_j) \cdot
+y_j(1-y_j) \cdot
+w'_{ij}
+\bigg] \cdot
+h_i(1-h_i) \cdot
+x_k
+\]
+
+\[
+w_{ki,\text{new}} = w_{ki,\text{old}} - \eta \cdot \sum\limits_{j=1}^{M}\bigg[
+(y_j - t_j) \cdot
+y_j(1-y_j) \cdot
+w'_{ij}
+\bigg] \cdot
+h_i(1-h_i) \cdot
+x_k
+\]
+\section{Implementation}
+\label{sec:orgheadline4}
+
+We propagate the network forward with the following snippet of code. The code is responsible for generating the summation of a node's inputs and weights. The summation value is stored with the node for later access and also fed into the sigmoid activation function. The result of that is pushed onto an intermediary vector object.
+
+\[
+y = f(u) = f(\sum\limits_{x=1}^{X} w_{x} \cdot h_{x})
+\]
+
+
+\begin{verbatim}
+for (size_t j = 0; j < l->num_neurons; j++) {
+  Neuron_t *n = l->neurons[j];
+
+  double net_input = 0;
+
+  if (i > 0) {
+    for (size_t k = 0; k < input_values.size(); k++) {
+      net_input += n->weights[k] * input_values[k];
+    }
+  } else {
+    net_input = working_set[j];
+  }
+
+  n->input_sum = net_input;
+  output.push_back(sigmoid(n->input_sum));
+}
+\end{verbatim}
+
+Once the network has iterated through the data, vector output holds the activated values at the output layer. Next we update the sets of weights from the hidden to the output layer according to the following rule.
+
+\[
+w'_{ij,\text{new}} = w'_{ij,\text{old}} - \eta \cdot (y_j - t_j) \cdot y_j(1-y_j) \cdot h_i
+\]
+
+\begin{verbatim}
+for (size_t i = 0; i < output_layer->num_neurons; i++) {
+  Neuron *n = output_layer->neurons[i];
+
+  double node_delta = -(desired[i] - output[i]) *
+  sigmoid_derivative(n->input_sum);
+
+  errors.push_back(node_delta);
+
+  for (size_t j = 0; j < n->num_inputs; j++) {
+    if (n->previous_weights[j] == 0)
+      n->previous_weights[j] = n->weights[j];
+
+      n->delta_weights[j] = n->weights[j] - n->previous_weights[j];
+      n->previous_weights[j] = n->weights[j];
+
+      double weight_change = sigmoid(hidden_layer->neurons[j]->input_sum) *
+      node_delta + MOMENTUM_ * n->delta_weights[j];
+
+      n->weights[j] -= ETA_ * weight_change;
+  }
+}
+\end{verbatim}
+
+
+We first compute \((y_j - t_j) \cdot y_j(1-y_j)\) since it is dependent on the node we are processing. Note that this value appears in our rule for updating input to hidden layers weights, so we save it in a vector for later use. Next, for each input to the hidden node, we calculate the weight change and set it in the node type. This is accomplished by multiplying our previously calculated value (the change in error with respect to the weights) with activated output of the hidden node that is connected to the output node input; \((y_j - t_j) \cdot y_j(1-y_j) \cdot h_i\). We can add momentum to the equation by adding the product of the change in weights to some momentum constant. Finally, we update the weights and multiply it by our learning rate \(\eta\).
+
+
+Next, we update the weights from the input to the hidden layer using the following rule. We need to sum the product of our previous calculation with each  weight from the weight between each hidden node and the output nodes. That result is multiplied with the sigmoid derivation of the hidden node multiplied with the activation function of the input neuron. The code is very similar to updating the hidden to output layer.  
+
+\[
+w_{ki,\text{new}} = w_{ki,\text{old}} - \eta \cdot \sum\limits_{j=1}^{M}\bigg[
+(y_j - t_j) \cdot
+y_j(1-y_j) \cdot
+w'_{ij}
+\bigg] \cdot
+h_i(1-h_i) \cdot
+x_k
+\]
+
+\begin{verbatim}
+for (size_t i = 0; i < output_layer->num_neurons; i++) {
+  sum_output += output_layer->neurons[i]->weights[j] * previous_error[i];
+}
+...
+double weight_change = sigmoid(input_layer->neurons[k]->input_sum) *
+sigmoid_derivative(hn->input_sum) * sum_output + MOMENTUM_ *
+hn->delta_weights[k];
+
+hn->weights[k] -= ETA_ * weight_change;
+\end{verbatim}
+
+\section{Results}
+\label{sec:orgheadline5}
+
+The program will output the number of correctly classified samples and the average total error given the network parameters defined in the types header file. Below is a summary of various inputs given to the network and the corresponding outputs.
+
+\begin{center}
+\begin{tabular}{rrrr}
+Input Nodes & Output Nodes & Momentum & Learning rate\\
+\hline
+1024 & 10 & 0.07 & 0.5\\
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{rr}
+Training Samples & Testing Samples\\
+\hline
+1934 & 943\\
+\end{tabular}
+\end{center}
+
+\begin{table}[htb]
+\caption{Training Set}
+\centering
+\begin{tabular}{rrrrlr}
+Hidden Nodes & Epochs & Correct & Total & Accuracy \% & Avg Total Error\\
+\hline
+8 & 10 & 9309 & 19340 & 48.13\% & 0.3178\\
+8 & 25 & 8347 & 48350 & 17.26\% & 0.4127\\
+16 & 10 & 15726 & 19340 & 81.31\% & 0.1417\\
+16 & 25 & 42281 & 48350 & 87.44\% & 0.1\\
+16 & 100 & 177932 & 193400 & 92\% & 0.064\\
+32 & 10 & 16498 & 19340 & 85.30\% & 0.119\\
+32 & 25 & 43577 & 48350 & 90.13\% & 0.0832\\
+32 & 100 & 180901 & 193400 & 93.53\% & 0.0552\\
+\end{tabular}
+\end{table}
+
+\begin{table}[htb]
+\caption{Testing set}
+\centering
+\begin{tabular}{rrrrlr}
+Hidden Nodes & Epochs & Correct & Total & Accuracy \% & Avg Total Error\\
+\hline
+8 & 10 & 504 & 943 & 53.44\% & 0.3471\\
+8 & 25 & 175 & 943 & 18.56\% & 0.4034\\
+16 & 10 & 768 & 943 & 81.44\% & 0.1286\\
+16 & 25 & 836 & 943 & 88.65\% & 0.087\\
+16 & 100 & 880 & 943 & 93.32\% & 0.057\\
+32 & 10 & 855 & 943 & 90.67\% & 0.0844\\
+32 & 25 & 836 & 943 & 88.65\% & 0.0941\\
+32 & 100 & 884 & 943 & 93.74\% & 0.0519\\
+\end{tabular}
+\end{table}
+\end{document}
